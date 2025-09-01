@@ -1,21 +1,21 @@
 using Leap;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 public class GestureDetector : MonoBehaviour {
     
-    [SerializeField] private float HandVelocityThreshold = 1f;
+    [SerializeField] private float handVelocityThreshold = 1f;
     
     public HandPose DetectPose(Hand hand) {
-        if (IsHandMoving(hand)) return HandPose.Moving;
         if (IsRock(hand)) return HandPose.Rock;
         if (IsPaper(hand)) return HandPose.Paper;
         if (IsScissors(hand)) return HandPose.Scissors;
         return HandPose.Unknown;
     }
 
-    private bool IsHandMoving(Hand hand) {
+    public bool IsHandMoving(Hand hand) {
         float palmVelocity = hand.PalmVelocity.magnitude;
-        return palmVelocity > HandVelocityThreshold;
+        return palmVelocity > handVelocityThreshold;
     }
 
     private bool IsRock(Hand hand) {
