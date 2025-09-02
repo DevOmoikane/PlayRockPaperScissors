@@ -12,17 +12,23 @@ public class GameController : MonoBehaviour {
         ShowingResult
     }
 
+    [Header("Visuals")]
     [SerializeField] private GestureDetector gestureDetector;
     [SerializeField] private LeapProvider leapProvider;
     [SerializeField] private TextMeshPro playerChoiceText;
     [SerializeField] private TextMeshPro currentPlayerChoiceText;
     [SerializeField] private TextMeshPro currentStateText;
     [SerializeField] private TextMeshPro countdownText;
+    [SerializeField] private TextMeshPro handVectorText;
+
+    [Header("Gameplay Variables")]
+    [SerializeField] private int selectMovementAtCount = 3;
     
     private GameState currentState = GameState.Waiting;
-    private float countdownTimer = 3f;
+    private int countMovement = 0;
     private HandPose playerChoice;
     private HandPose computerChoice;
+    private bool captureMovement = false;
 
     private void OnEnable() {
         leapProvider.OnUpdateFrame += OnUpdateFrame;
@@ -49,10 +55,15 @@ public class GameController : MonoBehaviour {
         HandPose currentPose = HandPose.Unknown;
         bool isHandMoving = false;
         Frame frame = leapProvider.CurrentFrame;
+        GestureDetector.HandMovement handMovement = null;
         if (frame.Hands.Count > 0) {
             Hand playerHand = frame.Hands[0];
             currentPose = gestureDetector.DetectPose(playerHand);
-            isHandMoving = gestureDetector.IsHandMoving(playerHand);
+            handMovement = gestureDetector.GetHandMovement(playerHand);
+            isHandMoving = handMovement.isMoving;
+            Vector3 direction = handMovement.velocity.normalized;
+            float palmVelocity = handMovement.velocity.magnitude;
+            handVectorText.text = $"{palmVelocity:00.00}\n{direction.x:0.00}\n{direction.y:0.00}\n{direction.z:0.00}";
             currentPlayerChoiceText.text = currentPose.ToString();
         }
 
@@ -60,14 +71,22 @@ public class GameController : MonoBehaviour {
             case GameState.Waiting:
                 if (isHandMoving) {
                     currentState = GameState.CountingDown;
-                    countdownTimer = 3f;
                     countdownText.enabled = true;
+                    countMovement = 0;
+                    captureMovement = true;
                 }
                 break;
             case GameState.CountingDown:
-                countdownTimer -= Time.deltaTime;
-                countdownText.text = Mathf.CeilToInt(countdownTimer).ToString();
-                if (countdownTimer <= 0f) {
+                countdownText.text = Mathf.CeilToInt(countMovement).ToString();
+                if (captureMovement && handMovement != null) {
+                    Vector3 dirVector = handMovement.velocity.normalized;
+                    if (dirVector.x >= 0.5 && dirVector.y <= -0.5) {
+                        captureMovement = false;
+                        countMovement++;
+                        FunctionTimer.Create(() => { captureMovement = true;}, 0.5f);
+                    }
+                }
+                if (countMovement >= 3) {
                     currentState = GameState.ShowingResult;
                     countdownText.enabled = false;
                     playerChoice = currentPose;

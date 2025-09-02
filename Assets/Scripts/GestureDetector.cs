@@ -1,10 +1,16 @@
 using Leap;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Serialization;
 
 public class GestureDetector : MonoBehaviour {
     
     [SerializeField] private float handVelocityThreshold = 1f;
+
+    public class HandMovement {
+        public bool isMoving;
+        public Vector3 velocity;
+    }
     
     public HandPose DetectPose(Hand hand) {
         if (IsRock(hand)) return HandPose.Rock;
@@ -13,9 +19,11 @@ public class GestureDetector : MonoBehaviour {
         return HandPose.Unknown;
     }
 
-    public bool IsHandMoving(Hand hand) {
-        float palmVelocity = hand.PalmVelocity.magnitude;
-        return palmVelocity > handVelocityThreshold;
+    public HandMovement GetHandMovement(Hand hand) {
+        HandMovement handMovement = new HandMovement();
+        handMovement.isMoving = hand.PalmVelocity.magnitude > handVelocityThreshold;
+        handMovement.velocity = hand.PalmVelocity;
+        return handMovement;
     }
 
     private bool IsRock(Hand hand) {
