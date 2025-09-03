@@ -20,6 +20,7 @@ public class GameController : MonoBehaviour {
     [SerializeField] private TextMeshPro currentStateText;
     [SerializeField] private TextMeshPro countdownText;
     [SerializeField] private TextMeshPro handVectorText;
+    [SerializeField] private Transform PCFist;
 
     [Header("Gameplay Variables")]
     [SerializeField] private int selectMovementAtCount = 3;
@@ -48,7 +49,9 @@ public class GameController : MonoBehaviour {
     // Added: runtime state for robust detection
     private float smoothedDownSpeed = 0f;
     private bool downActive = false;
+    private bool upActive = false;
     private float recaptureTimer = 0f;
+    private Vector3 downDirWorld = new Vector3(1f, -1f, 0f);
 
     private void OnEnable() {
         leapProvider.OnUpdateFrame += OnUpdateFrame;
@@ -67,6 +70,9 @@ public class GameController : MonoBehaviour {
     private void Start() {
         currentState = GameState.Waiting;
         countdownText.enabled = false;
+        // Compute world-space down direction based on sensor orientation
+        Vector3 localDown = sensorLocalDownDirection.sqrMagnitude > 0f ? sensorLocalDownDirection.normalized : new Vector3(1f, -1f, 0f).normalized;
+        downDirWorld = sensorTransform != null ? sensorTransform.TransformDirection(localDown).normalized : localDown;
     }
 
     private void Update() {
@@ -82,20 +88,20 @@ public class GameController : MonoBehaviour {
             handMovement = gestureDetector.GetHandMovement(playerHand);
             isHandMoving = handMovement.isMoving;
 
-            // Compute world-space down direction based on sensor orientation
-            Vector3 localDown = sensorLocalDownDirection.sqrMagnitude > 0f ? sensorLocalDownDirection.normalized : new Vector3(1f, -1f, 0f).normalized;
-            Vector3 downDirWorld = sensorTransform != null ? sensorTransform.TransformDirection(localDown).normalized : localDown;
-
             // Project palm velocity onto the down direction and smooth it
             float projectedDownSpeed = Vector3.Dot(handMovement.velocity, downDirWorld); // m/s along 'down'
             float dt = Mathf.Max(Time.deltaTime, 0.0001f);
             float alpha = 1f - Mathf.Exp(-dt / Mathf.Max(velocitySmoothingTime, 0.0001f)); // exponential smoothing
             smoothedDownSpeed = Mathf.Lerp(smoothedDownSpeed, projectedDownSpeed, alpha);
 
-            Vector3 direction = handMovement.velocity.normalized;
-            float palmVelocity = handMovement.velocity.magnitude;
-            handVectorText.text = $"{palmVelocity:00.00}\n{direction.x:0.00}\n{direction.y:0.00}\n{direction.z:0.00}\n↓:{smoothedDownSpeed:0.00}";
-            currentPlayerChoiceText.text = currentPose.ToString();
+            // Vector3 direction = handMovement.velocity.normalized;
+            // float palmVelocity = handMovement.velocity.magnitude;
+            // handVectorText.text = $"{palmVelocity:00.00}\n{direction.x:0.00}\n{direction.y:0.00}\n{direction.z:0.00}\n↓:{smoothedDownSpeed:0.00}";
+            // currentPlayerChoiceText.text = currentPose.ToString();
+
+            float handDeltaPosition = -projectedDownSpeed * 10 * Time.deltaTime;
+            // TODO: protect the position of the fist so it doesn't go over the boundaries of the screen or playable area
+            PCFist.Translate(0, handDeltaPosition, 0);
         }
 
         switch (currentState) {
@@ -109,6 +115,7 @@ public class GameController : MonoBehaviour {
                     // Reset detection state
                     smoothedDownSpeed = 0f;
                     downActive = false;
+                    upActive = false;
                     recaptureTimer = 0f;
                 }
                 break;
@@ -127,6 +134,9 @@ public class GameController : MonoBehaviour {
                             countMovement++;
                             // Start cooldown so noise/spikes don't double count
                             recaptureTimer = downDebounceTime;
+                        }else if (!upActive && smoothedDownSpeed <= -downTriggerSpeed) {
+                            upActive = true;
+                            recaptureTimer = downDebounceTime;
                         }
 
                         // Exit 'down' when we fall below release threshold
@@ -139,7 +149,8 @@ public class GameController : MonoBehaviour {
                 if (countMovement >= selectMovementAtCount) {
                     currentState = GameState.ShowingResult;
                     countdownText.enabled = false;
-                    playerChoice = currentPose;
+                    // playerChoice = currentPose;
+                    FunctionTimer.Create(() => { playerChoice = currentPose; }, 0.2f);
                     FunctionTimer.Create(() => { currentState = GameState.Waiting; }, 5f);
                 }
                 break;
